@@ -2,12 +2,13 @@ import math
 import os
 import time
 
+import albumentations as A
 import matplotlib.pyplot as plt
 import torch
+from albumentations.pytorch import ToTensorV2
 from torch import optim
 from torch.nn import CrossEntropyLoss, MSELoss
 from torch.utils.data import DataLoader
-from torchvision import transforms
 from torchvision.models import resnet50
 from tqdm import tqdm
 
@@ -24,7 +25,7 @@ STD = [0.229, 0.224, 0.225]
 # for, and the batch size
 INIT_LR = 1e-3
 NUM_EPOCHS = 50
-BATCH_SIZE = 64
+BATCH_SIZE = 2
 # specify the loss weights
 LABELS = 1.0
 BBOX = 1.0
@@ -33,34 +34,44 @@ model_name = "50_epochs_giouloss"
 
 CLASSES = ["Circle"]
 
-transforms = transforms.Compose([
-    transforms.ToPILImage(),
-    transforms.ToTensor(),
-    transforms.Normalize(mean=MEAN, std=STD)
-])
+bbox_format = 'albumentations'
+train_transform = A.Compose(
+    [
+     A.Equalize(mode='cv', by_channels=True, mask=None, p=0.5),
+     A.HorizontalFlip(p=0.5),
+     A.VerticalFlip(p=0.5),
+     A.RandomRotate90(p=0.5),
+     # A.Rotate(limit=90, p=0.5, border_mode=0, rotate_method="ellipse"),
+     A.CLAHE(p=0.5),
+     A.OneOf([
+         A.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
+         A.GridDistortion(p=0.5),
+     ], p=0.0),
+     A.Normalize(always_apply=True),
+     ToTensorV2()],
+    bbox_params=A.BboxParams(format=bbox_format, label_fields=['category_ids']),
+)
+
+test_transform = A.Compose([
+    A.Normalize(always_apply=True),
+    ToTensorV2()],
+    bbox_params=A.BboxParams(format=bbox_format, label_fields=['category_ids'])
+)
 
 train_dataset = CustomImageDataset(
     img_dir=r"datasets/dataset_circle/train/img",
     label_dir=r"datasets/dataset_circle/train/labels",
-    transform=transforms)
+    transform=train_transform)
 
 val_dataset = CustomImageDataset(
     img_dir=r"datasets/dataset_circle/val/img",
     label_dir=r"datasets/dataset_circle/val/labels",
-    transform=transforms)
+    transform=test_transform)
 
 training_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False)
 validation_loader = torch.utils.data.DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
 if __name__ == "__main__":
-    # for i in range(10):
-    #     img, label = dataset[i]
-    #     plt.imshow(img.permute(1, 2, 0))
-    #     print(label)
-    #     plt.show()
-
-    path_img = r"datasets/dataset_circle/train/img"
-    path_labels = r"datasets/dataset_circle/train/labels"
 
     print("[INFO] total training samples: {}...".format(len(train_dataset)))
     print("[INFO] total test samples: {}...".format(len(val_dataset)))
@@ -122,6 +133,7 @@ if __name__ == "__main__":
             # bboxes = torch.stack(bboxes, dim=1)
 
             bboxes = bboxes.to(torch.float32)
+            bboxes = torch.squeeze(bboxes, 1)
 
             (images, labels, bboxes) = (images.to(DEVICE),
                                         labels.to(DEVICE), bboxes.to(DEVICE))
@@ -130,7 +142,6 @@ if __name__ == "__main__":
             predictions = objectDetector(images)
             bboxLoss = bboxLossFunc(predictions[0], bboxes)
 
-            classLoss = classLossFunc(predictions[1], labels)
             totalLoss = BBOX * bboxLoss
             totalLoss = totalLoss.to(torch.float)
 
@@ -153,6 +164,8 @@ if __name__ == "__main__":
             for (images, labels, bboxes, _) in testLoader:
                 # send the input to the device
                 labels = torch.Tensor(labels)
+                bboxes = torch.squeeze(bboxes, 1)
+
                 # bboxes = torch.stack(bboxes, dim=1)
                 (images, labels, bboxes) = (images.to(DEVICE),
                                             labels.to(DEVICE), bboxes.to(DEVICE))
