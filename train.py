@@ -13,7 +13,7 @@ from torchvision.models import resnet50, resnet18
 from tqdm import tqdm
 
 from logger import WeightandBiaises
-from losses import GIoULoss
+from losses import GIoULoss, DIoULoss
 from metrics import batch_iou
 from model.object_detector import ObjectDetector
 from torch_datasets import CustomImageDataset
@@ -118,7 +118,7 @@ if __name__ == "__main__":
 
     classLossFunc = CrossEntropyLoss()
 
-    bboxLossFunc = GIoULoss()
+    bboxLossFunc = DIoULoss()
     # initialize the optimizer, compile the model, and show the model
     # summary
     opt = optim.Adam(objectDetector.parameters(), lr=INIT_LR)
