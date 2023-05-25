@@ -1,0 +1,1 @@
+{"box_data": [{"position": {"minX": 0.019566616043448448, "maxX": 0.662451982498169, "minY": 0.013609412126243114, "maxY": 0.6599081158638}, "class_id": 0, "box_caption": "circle", "scores": {"acc": 1}}], "class_labels": {"0": "circle"}}

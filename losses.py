@@ -1,5 +1,7 @@
 import torch
+from torch import nn
 from torchvision.ops.boxes import _box_inter_union
+from torchvision.ops import generalized_box_iou_loss
 
 
 def giou_loss(input_boxes, target_boxes, eps=1e-7):
@@ -21,8 +23,21 @@ def giou_loss(input_boxes, target_boxes, eps=1e-7):
 
     loss = 1 - giou
 
+    if loss.sum()<0:
+        print("neg")
+
     return loss.sum()
 
+
+class GIoULoss(nn.Module):
+    def __init__(self):
+        super(GIoULoss, self).__init__()
+
+    def forward(self, predictions, target):
+        return giou_loss(input_boxes=predictions, target_boxes=target, eps=1e-7)
+
+    # def __call__(self, predictions, target):
+    #   return giou_loss(input_boxes=predictions, target_boxes=target, eps=1e-7)
 
 def generalized_iou_loss(gt_bboxes, pr_bboxes, reduction='mean'):
     """

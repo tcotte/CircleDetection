@@ -1,0 +1,42 @@
+{
+    "os": "Windows-10-10.0.19044-SP0",
+    "python": "3.8.13",
+    "heartbeatAt": "2023-05-25T07:53:43.919583",
+    "startedAt": "2023-05-25T07:53:42.753289",
+    "docker": null,
+    "cuda": null,
+    "args": [],
+    "state": "running",
+    "program": "C:\\Users\\tristan_cotte\\PycharmProjects\\CircleDetection\\detect.py",
+    "codePath": "detect.py",
+    "git": {
+        "remote": "https://github.com/tcotte/CircleDetection.git",
+        "commit": "b065177b62dc77fa5e54ea30c61bdb1ca82aba74"
+    },
+    "email": "tristan.cotte@outlook.fr",
+    "root": "C:/Users/tristan_cotte/PycharmProjects/CircleDetection",
+    "host": "FRF364ZVD",
+    "username": "Tristan_COTTE",
+    "executable": "C:\\Users\\tristan_cotte\\Miniconda3\\envs\\microbio\\python.exe",
+    "cpu_count": 6,
+    "cpu_count_logical": 12,
+    "cpu_freq": {
+        "current": 2100.0,
+        "min": 0.0,
+        "max": 2100.0
+    },
+    "cpu_freq_per_core": [
+        {
+            "current": 2100.0,
+            "min": 0.0,
+            "max": 2100.0
+        }
+    ],
+    "disk": {
+        "total": 471.55956649780273,
+        "used": 450.22646713256836
+    },
+    "memory": {
+        "total": 15.367664337158203
+    }
+}
