@@ -43,7 +43,7 @@ def fix_bboxes(bboxes):
     return bboxes
 
 
-model_name = "50_epochs_giouloss"
+model_name = "testwb"
 
 CLASSES = ["Circle"]
 

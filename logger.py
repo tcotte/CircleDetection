@@ -38,14 +38,11 @@ class WeightandBiaises:
         :param train_loss: average test loss for the current epoch.
         :param epoch: current epoch.
         """
-        if epoch % self.interval_display == 0:
-            bool_commit = False
-        else:
-            bool_commit = True
-
+        bool_commit = True
         wandb.log({"Train/Loss": train_loss, "Test/Loss": test_loss}, step=epoch, commit=bool_commit)
 
-    def log_accuracy(self, train_accuracy: Union[None, float, List], test_accuracy: Union[float, List], epoch: int) -> None:
+    def log_accuracy(self, train_accuracy: Union[None, float, List], test_accuracy: Union[float, List],
+                     epoch: int) -> None:
         """
         Log iou accuracy.
         :param train_accuracy:
@@ -53,9 +50,10 @@ class WeightandBiaises:
         :param epoch: current epoch.
         """
         if len(self.class_labels) < 2:
-            wandb.log({"Test/Accuracy": test_accuracy}, step=epoch)
             if train_accuracy is not None:
-                wandb.log({"Train/Accuracy": train_accuracy})
+                wandb.log({"Test/Accuracy": test_accuracy, "Train/Accuracy": train_accuracy}, step=epoch, commit=False)
+            else:
+                wandb.log({"Test/Accuracy": test_accuracy}, step=epoch, commit=False)
         else:
             for idx, cls in enumerate(self.class_labels):
                 wandb.log({"Test/Accuracy_" + cls: test_accuracy[idx]}, commit=False)
@@ -109,7 +107,7 @@ class WeightandBiaises:
         :param x: torch tensor image [B, 3, H, W]
         :param e: current epoch
         """
-        if e % self.interval_display == 0:
+        if (e!=0) and (e % self.interval_display == 0):
             for pred, x, y in zip(pred_batch, x_batch, y_batch):
                 wandb_mask = self.visualize_one_image(pred, x)
                 self.image_list.append(wandb_mask)

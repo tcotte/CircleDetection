@@ -4,9 +4,6 @@ import cv2
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-from torchvision.io import read_image
-
-IMG_SIZE = 128
 
 
 class CustomImageDataset(Dataset):
@@ -33,7 +30,16 @@ class CustomImageDataset(Dataset):
         bboxes = txtfile.readline().split(" ")
         txtfile.close()
 
-        bboxes = np.array([[float(x) / IMG_SIZE for x in bboxes]])
+        # bboxes = np.array([[float(x) / IMG_SIZE for x in bboxes]])
+        bboxes = np.array(bboxes)
+        if bboxes.ndim == 1:
+            bboxes = np.expand_dims(bboxes, axis=0)
+
+        img_h, img_w = image.shape[:2]
+        bboxes[:, 0] = bboxes[:, 0] / img_w
+        bboxes[:, 1] = bboxes[:, 1] / img_h
+        bboxes[:, 2] = bboxes[:, 2] / img_w
+        bboxes[:, 3] = bboxes[:, 3] / img_h
         category_ids = np.zeros(len(bboxes), dtype=int)
 
         if self.transform:
