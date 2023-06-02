@@ -49,24 +49,29 @@ def visualize(image, bboxes, category_ids, category_id_to_name):
 
 
 bbox_format = 'albumentations'
-transform = A.Compose(
+train_transform = A.Compose(
     [
-     # A.Equalize(mode='cv', by_channels=True, mask=None, always_apply=True),
-     A.HorizontalFlip(p=0.5),
-     A.VerticalFlip(p=0.5),
-     A.Rotate(limit=90, p=0.5, border_mode=0, rotate_method="ellipse"),
-     A.CLAHE(p=0.5),
-     A.OneOf([
-         A.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
-         A.GridDistortion(p=0.5),
-     ], p=0.0), A.Normalize(always_apply=True), ToTensorV2()],
+        A.augmentations.geometric.transforms.Affine (scale=(0.5, 1), translate_percent=(0.15, 0.5), keep_ratio=True, p=0.5),
+        A.Equalize(mode='cv', by_channels=True, mask=None, p=0.5),
+        A.HorizontalFlip(p=0.5),
+        A.VerticalFlip(p=0.5),
+        A.RandomRotate90(p=0.5),
+        # A.Rotate(limit=90, p=0.5, border_mode=0, rotate_method="ellipse"),
+        A.CLAHE(p=0.5),
+        A.OneOf([
+            A.ElasticTransform(p=0.5, alpha=120, sigma=120 * 0.05, alpha_affine=120 * 0.03),
+            A.GridDistortion(p=0.5),
+        ], p=0.0),
+        A.Normalize(always_apply=True),
+        A.augmentations.geometric.resize.Resize (683, 1024, interpolation=1, always_apply=False, p=1),
+        ToTensorV2()],
     bbox_params=A.BboxParams(format=bbox_format, label_fields=['category_ids']),
 )
 
 train_dataset = CustomImageDataset(
     img_dir=r"datasets/dataset_circle/train/img",
     label_dir=r"datasets/dataset_circle/train/labels",
-    transform=transform)
+    transform=train_transform)
 
 # We will use the mapping from category_id to the class name
 # to visualize the class label for the bounding box on the image

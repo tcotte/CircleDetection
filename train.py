@@ -9,11 +9,11 @@ from albumentations.pytorch import ToTensorV2
 from torch import optim
 from torch.nn import CrossEntropyLoss
 from torch.utils.data import DataLoader
-from torchvision.models import resnet50, resnet18
+from torchvision.models import resnet18
 from tqdm import tqdm
 
 from logger import WeightandBiaises
-from losses import GIoULoss, DIoULoss
+from losses import DIoULoss
 from metrics import batch_iou
 from model.object_detector import ObjectDetector
 from torch_datasets import CustomImageDataset
@@ -50,6 +50,7 @@ CLASSES = ["Circle"]
 bbox_format = 'albumentations'
 train_transform = A.Compose(
     [
+        A.augmentations.geometric.transforms.Affine (scale=(0.5, 1), translate_percent=(0.15, 0.5), keep_ratio=True, p=0.5),
         A.Equalize(mode='cv', by_channels=True, mask=None, p=0.5),
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
@@ -61,11 +62,13 @@ train_transform = A.Compose(
             A.GridDistortion(p=0.5),
         ], p=0.0),
         A.Normalize(always_apply=True),
+        A.augmentations.geometric.resize.Resize(683, 1024, interpolation=1, always_apply=False, p=1),
         ToTensorV2()],
     bbox_params=A.BboxParams(format=bbox_format, label_fields=['category_ids']),
 )
 
 test_transform = A.Compose([
+    A.augmentations.geometric.resize.Resize(683, 1024, interpolation=1, always_apply=False, p=1),
     A.Normalize(always_apply=True),
     ToTensorV2()],
     bbox_params=A.BboxParams(format=bbox_format, label_fields=['category_ids'])

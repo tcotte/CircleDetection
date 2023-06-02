@@ -31,7 +31,7 @@ class CustomImageDataset(Dataset):
         txtfile.close()
 
         # bboxes = np.array([[float(x) / IMG_SIZE for x in bboxes]])
-        bboxes = np.array(bboxes)
+        bboxes = np.array(bboxes, dtype=float)
         if bboxes.ndim == 1:
             bboxes = np.expand_dims(bboxes, axis=0)
 
