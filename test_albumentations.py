@@ -1,12 +1,10 @@
 import random
 
-import torch
-import torchvision
-from natsort import natsorted
-import cv2
-from matplotlib import pyplot as plt
 import albumentations as A
+import cv2
+import torch
 from albumentations.pytorch import ToTensorV2
+from matplotlib import pyplot as plt
 
 from torch_datasets import CustomImageDataset
 

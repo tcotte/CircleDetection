@@ -26,21 +26,30 @@ class CustomImageDataset(Dataset):
         image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
 
         txtfile = filename[:-4] + ".txt"
-        txtfile = open(os.path.join(self.label_dir, txtfile), "r")
-        bboxes = txtfile.readline().split(" ")
-        txtfile.close()
+        txtfile = os.path.join(self.label_dir, txtfile)
 
-        # bboxes = np.array([[float(x) / IMG_SIZE for x in bboxes]])
-        bboxes = np.array(bboxes, dtype=float)
-        if bboxes.ndim == 1:
-            bboxes = np.expand_dims(bboxes, axis=0)
+        if os.stat(txtfile).st_size > 0:
+            opened_file = open(txtfile, "r")
+            bboxes = opened_file.readline().split(" ")
+            opened_file.close()
 
-        img_h, img_w = image.shape[:2]
-        bboxes[:, 0] = bboxes[:, 0] / img_w
-        bboxes[:, 1] = bboxes[:, 1] / img_h
-        bboxes[:, 2] = bboxes[:, 2] / img_w
-        bboxes[:, 3] = bboxes[:, 3] / img_h
-        category_ids = np.zeros(len(bboxes), dtype=int)
+            # bboxes = np.array([[float(x) / IMG_SIZE for x in bboxes]])
+            bboxes = np.array(bboxes, dtype=float)
+            if bboxes.ndim == 1:
+                bboxes = np.expand_dims(bboxes, axis=0)
+
+            img_h, img_w = image.shape[:2]
+            bboxes[:, 0] = bboxes[:, 0] / img_w
+            bboxes[:, 1] = bboxes[:, 1] / img_h
+            bboxes[:, 2] = bboxes[:, 2] / img_w
+            bboxes[:, 3] = bboxes[:, 3] / img_h
+            category_ids = np.ones(len(bboxes), dtype=int)
+            probabilities = np.ones(len(bboxes), dtype=float)
+
+        else:
+            bboxes = np.array([[0, 0, 1, 1]], dtype=int)
+            category_ids = np.zeros(len(bboxes), dtype=int)
+            probabilities = np.zeros(len(bboxes), dtype=float)
 
         if self.transform:
             augmented = self.transform(image=image, bboxes=bboxes, category_ids=category_ids)
@@ -48,6 +57,6 @@ class CustomImageDataset(Dataset):
             bboxes = augmented['bboxes']
 
         if self.label_needed:
-            return image, 0, torch.as_tensor(bboxes), filename
+            return image, category_ids, torch.as_tensor(bboxes), probabilities, filename
         else:
             return image.type(torch.FloatTensor), bboxes

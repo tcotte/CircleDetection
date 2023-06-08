@@ -1,4 +1,5 @@
 # import the necessary packages
+import torch
 from torch.nn import Dropout
 from torch.nn import Identity
 from torch.nn import Linear
@@ -29,6 +30,17 @@ class ObjectDetector(Module):
             Sigmoid()
         )
 
+        self.prob_x = Sequential(
+            Linear(base_model.fc.in_features, 128),
+            ReLU(),
+            Linear(128, 64),
+            ReLU(),
+            Linear(64, 32),
+            ReLU(),
+            Linear(32, 1),
+            Sigmoid()
+        )
+
         # build the classifier head to predict the class labels
         self.classifier = Sequential(
             Linear(base_model.fc.in_features, 512),
@@ -49,6 +61,11 @@ class ObjectDetector(Module):
         features = self.base_model(x)
         bboxes = self.regressor(features)
         class_logits = self.classifier(features)
-        # return the outputs as a tuple
+        x_prob = self.prob_x(features)
 
-        return bboxes, class_logits
+
+        gate = torch.where(x_prob > 0.5, torch.ones_like(x_prob), torch.zeros_like(x_prob))
+        bboxes = bboxes * gate
+        class_logits = class_logits * gate
+
+        return bboxes, class_logits, x_prob

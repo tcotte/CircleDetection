@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import torch
 from albumentations.pytorch import ToTensorV2
 from torch import optim
-from torch.nn import CrossEntropyLoss
+from torch.nn import CrossEntropyLoss, BCELoss
 from torch.utils.data import DataLoader
 from torchvision.models import resnet18
 from tqdm import tqdm
@@ -28,11 +28,14 @@ STD = [0.229, 0.224, 0.225]
 # for, and the batch size
 INIT_LR = 1e-5
 NUM_EPOCHS = 500
-BATCH_SIZE = 2
+BATCH_SIZE = 1
 # specify the loss weights
 LABELS = 1.0
-BBOX = 1.0
+BBOX = 0.6
+PROB = 0.4
 
+
+wb_visu = False
 
 def fix_bboxes(bboxes):
     for box in bboxes:
@@ -120,6 +123,7 @@ if __name__ == "__main__":
     # define our loss functions
 
     classLossFunc = CrossEntropyLoss()
+    probLossFunc = BCELoss()
 
     bboxLossFunc = DIoULoss()
     # initialize the optimizer, compile the model, and show the model
@@ -130,7 +134,10 @@ if __name__ == "__main__":
     H = {"total_train_loss": [], "total_val_loss": [], "train_class_acc": [],
          "val_class_acc": [], "train_iou": [], "val_iou": []}
 
-    w_b = WeightandBiaises(project_name="circle_detection", run_id=model_name, interval_display=50)
+    if wb_visu:
+        w_b = WeightandBiaises(project_name="circle_detection", run_id=model_name, interval_display=50)
+    else:
+        w_b = None
 
     # loop over epochs
     print("[INFO] training the network...")
@@ -150,7 +157,7 @@ if __name__ == "__main__":
         val_iou = 0
 
         # loop over the training set
-        for (images, labels, bboxes, filenames) in trainLoader:
+        for (images, labels, bboxes, probs, filenames) in trainLoader:
             # send the input to the device
             labels = torch.Tensor(labels)
             # bboxes = torch.stack(bboxes, dim=1)
@@ -158,14 +165,15 @@ if __name__ == "__main__":
             bboxes = bboxes.to(torch.float32)
             bboxes = torch.squeeze(bboxes, 1)
 
-            (images, labels, bboxes) = (images.to(DEVICE),
-                                        labels.to(DEVICE), bboxes.to(DEVICE))
+            (images, labels, bboxes, probs) = (images.to(DEVICE),
+                                        labels.to(DEVICE), bboxes.to(DEVICE), probs.to(DEVICE))
             # perform a forward pass and calculate the training loss
             opt.zero_grad()
             predictions = objectDetector(images)
             bboxLoss = bboxLossFunc(predictions[0], bboxes)
+            prob_loss = probLossFunc(predictions[2], probs.float())
+            totalLoss = BBOX * bboxLoss + prob_loss * LABELS
 
-            totalLoss = BBOX * bboxLoss
             totalLoss = totalLoss.to(torch.float)
 
             # zero out the gradients, perform the backpropagation step,
@@ -184,26 +192,29 @@ if __name__ == "__main__":
             # set the model in evaluation mode
             objectDetector.eval()
             # loop over the validation set
-            for (images, labels, bboxes, _) in testLoader:
+            for (images, labels, bboxes, probs, _) in testLoader:
                 # send the input to the device
                 labels = torch.Tensor(labels)
                 bboxes = torch.squeeze(bboxes, 1)
 
                 # bboxes = torch.stack(bboxes, dim=1)
-                (images, labels, bboxes) = (images.to(DEVICE),
-                                            labels.to(DEVICE), bboxes.to(DEVICE))
+                (images, labels, bboxes, probs) = (images.to(DEVICE),
+                                            labels.to(DEVICE), bboxes.to(DEVICE), probs.to(DEVICE))
                 # make the predictions and calculate the validation loss
                 predictions = objectDetector(images)
 
                 bboxLoss = bboxLossFunc(predictions[0], bboxes.to(torch.float32))
                 classLoss = classLossFunc(predictions[1], labels)
+                prob_loss = probLossFunc(predictions[2], probs.float())
                 totalLoss = BBOX * bboxLoss
                 totalValLoss += totalLoss
                 # calculate the number of correct predictions
                 val_iou += batch_iou(a=predictions[0].detach().cpu().numpy(), b=bboxes.cpu().numpy()).sum() / len(
                     bboxes)
                 valCorrect += (predictions[1].argmax(1) == labels).type(torch.float).sum().item()
-                w_b.plot_one_batch(predictions[0], images, [None]*len(predictions[0]), e)
+
+                if w_b is not None:
+                    w_b.plot_one_batch(predictions[0], images, [None]*len(predictions[0]), e)
 
         # calculate the average training and validation loss
         avgTrainLoss = totalTrainLoss / trainSteps
@@ -228,9 +239,10 @@ if __name__ == "__main__":
         print("[INFO] total time taken to train the model: {:.2f}s".format(
             endTime - startTime))
 
-        w_b.log_accuracy(train_accuracy=train_iou, test_accuracy=val_iou, epoch=e)
-        w_b.log_losses(train_loss=avgTrainLoss.cpu().detach().numpy(), test_loss=avgValLoss.cpu().detach().numpy(), epoch=e)
-        w_b.log_table(e)
+        if w_b is not None:
+            w_b.log_accuracy(train_accuracy=train_iou, test_accuracy=val_iou, epoch=e)
+            w_b.log_losses(train_loss=avgTrainLoss.cpu().detach().numpy(), test_loss=avgValLoss.cpu().detach().numpy(), epoch=e)
+            w_b.log_table(e)
 
     # serialize the model to disk
     print("[INFO] saving object detector model...")
@@ -240,7 +252,8 @@ if __name__ == "__main__":
     output_path = "trained_models"
     create_directory(output_path)
     torch.save(objectDetector, os.path.join(output_path, model_name + '.pt'))
-    w_b.save_model(model_path=os.path.join(output_path, model_name + ".pth"))
+    if w_b is not None:
+        w_b.save_model(model_path=os.path.join(output_path, model_name + ".pth"))
     print("[INFO] Model was saved online")
     # f = open(LE_PATH, "wb")
     # f.write(pickle.dumps(le))
