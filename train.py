@@ -114,8 +114,8 @@ if __name__ == "__main__":
     print("[INFO] total training samples: {}...".format(len(train_dataset)))
     print("[INFO] total test samples: {}...".format(len(val_dataset)))
     # calculate steps per epoch for training and validation set
-    trainSteps = math.ceil(len(train_dataset) / BATCH_SIZE)
-    valSteps = math.ceil(len(val_dataset) / BATCH_SIZE)
+    train_steps = math.ceil(len(train_dataset) / BATCH_SIZE)
+    val_steps = math.ceil(len(val_dataset) / BATCH_SIZE)
     # create data loaders
     # trainLoader = DataLoader(train_dataset, batch_size=BATCH_SIZE,
     #                          shuffle=True, num_workers=os.cpu_count(), pin_memory=PIN_MEMORY)
@@ -179,6 +179,12 @@ if __name__ == "__main__":
         # initialize the total training and validation loss
         totalTrainLoss = 0
         totalValLoss = 0
+
+        bbox_train_loss = 0
+        bbox_test_loss = 0
+
+        obj_train_loss = 0
+        obj_test_loss = 0
         # initialize the number of correct predictions in the training
         # and validation step
         trainCorrect = 0
@@ -201,9 +207,9 @@ if __name__ == "__main__":
             # perform a forward pass and calculate the training loss
             opt.zero_grad()
             predictions = objectDetector(images)
-            bboxLoss = bboxLossFunc(predictions[0], bboxes)
-            prob_loss = probLossFunc(predictions[2], probs.float())
-            totalLoss = BBOX * bboxLoss + prob_loss * PROB
+            bbox_loss = bboxLossFunc(predictions[0], bboxes)
+            objectness_loss = probLossFunc(predictions[2], probs.float())
+            totalLoss = BBOX * bbox_loss + objectness_loss * PROB
 
             totalLoss = totalLoss.to(torch.float)
 
@@ -216,6 +222,8 @@ if __name__ == "__main__":
             # calculate the number of correct predictions
             train_iou += batch_iou(a=predictions[0].detach().cpu().numpy(), b=bboxes.cpu().numpy()).sum() / len(bboxes)
             totalTrainLoss += totalLoss
+            bbox_train_loss += bbox_loss
+            obj_train_loss += objectness_loss
             trainCorrect += (predictions[1].argmax(1) == labels).type(torch.float).sum().item()
 
         # switch off autograd
@@ -234,11 +242,13 @@ if __name__ == "__main__":
                 # make the predictions and calculate the validation loss
                 predictions = objectDetector(images)
 
-                bboxLoss = bboxLossFunc(predictions[0], bboxes.to(torch.float32))
+                bbox_loss = bboxLossFunc(predictions[0], bboxes.to(torch.float32))
                 # classLoss = classLossFunc(predictions[1], labels)
-                prob_loss = probLossFunc(predictions[2], probs.float())
-                totalLoss = BBOX * bboxLoss + prob_loss * PROB
+                objectness_loss = probLossFunc(predictions[2], probs.float())
+                totalLoss = BBOX * bbox_loss + objectness_loss * PROB
                 totalValLoss += totalLoss
+                bbox_test_loss += bbox_loss
+                obj_test_loss += objectness_loss
                 # calculate the number of correct predictions
                 val_iou += batch_iou(a=predictions[0].detach().cpu().numpy(), b=bboxes.cpu().numpy()).sum() / len(
                     bboxes)
@@ -248,32 +258,48 @@ if __name__ == "__main__":
                     w_b.plot_one_batch(predictions[0], images, [None]*len(predictions[0]), e)
 
         # calculate the average training and validation loss
-        avgTrainLoss = totalTrainLoss / trainSteps
-        avgValLoss = totalValLoss / valSteps
+        avg_train_loss = totalTrainLoss / train_steps
+        avg_val_loss = totalValLoss / val_steps
+
+
         # calculate the training and validation accuracy
         trainCorrect = trainCorrect / len(train_dataset)
         valCorrect = valCorrect / len(val_dataset)
         # update our training history
-        H["total_train_loss"].append(avgTrainLoss.cpu().detach().numpy())
+        H["total_train_loss"].append(avg_train_loss.cpu().detach().numpy())
         H["train_class_acc"].append(trainCorrect)
-        H["total_val_loss"].append(avgValLoss.cpu().detach().numpy())
+        H["total_val_loss"].append(avg_val_loss.cpu().detach().numpy())
         H["val_class_acc"].append(valCorrect)
-        H["train_iou"].append(train_iou / trainSteps)
-        H["val_iou"].append(val_iou / valSteps)
+        H["train_iou"].append(train_iou / train_steps)
+        H["val_iou"].append(val_iou / val_steps)
         # print the model training and validation information
         print("[INFO] EPOCH: {}/{}".format(e + 1, NUM_EPOCHS))
         print("Train loss: {:.6f}, Train accuracy: {:.8f}".format(
-            avgTrainLoss, train_iou / trainSteps))
+            avg_train_loss, train_iou / train_steps))
         print("Val loss: {:.6f}, Val accuracy: {:.8f}".format(
-            avgValLoss, val_iou / valSteps))
+            avg_val_loss, val_iou / val_steps))
         endTime = time.time()
         print("[INFO] total time taken to train the model: {:.2f}s".format(
             endTime - startTime))
 
         if w_b is not None:
-            w_b.log_accuracy(train_accuracy=train_iou / trainSteps, test_accuracy=val_iou / valSteps, epoch=e)
-            w_b.log_losses(train_loss=avgTrainLoss.cpu().detach().numpy(), test_loss=avgValLoss.cpu().detach().numpy(), epoch=e)
-            w_b.log_table(e)
+            if args.prob_ratio > 0:
+                w_b.log_detailed_stats(stats={
+                    "train_accuracy": train_iou / train_steps, "test_accuracy": val_iou / val_steps,
+                    "train_loss": avg_train_loss.cpu().detach().numpy(), "test_loss": avg_val_loss.cpu().detach().numpy(),
+                    # To complete
+                    "train_obj_accuracy": 0, "test_obj_accuracy": 0,
+                    "train_bbox_accuracy": train_iou / train_steps, "test_bbox_accuracy": val_iou / val_steps,
+                    "train_obj_loss": obj_train_loss / train_steps, "test_obj_loss": obj_test_loss / val_steps,
+                    "train_bbox_loss": bbox_train_loss, "test_bbox_loss": bbox_test_loss
+                })
+            else:
+                w_b.log_accuracy(train_accuracy=train_iou / train_steps, test_accuracy=val_iou / val_steps, epoch=e,
+                                 commit=False)
+                w_b.log_losses(train_loss=avg_train_loss.cpu().detach().numpy(),
+                               test_loss=avg_val_loss.cpu().detach().numpy(), epoch=e, commit=True)
+                w_b.log_table(e)
+
 
     # serialize the model to disk
     print("[INFO] saving object detector model...")

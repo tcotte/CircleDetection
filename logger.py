@@ -34,7 +34,8 @@ class WeightandBiaises:
 
         self.image_list = []
 
-    def log_losses(self, train_loss: float, test_loss: float, epoch: int) -> None:
+    @staticmethod
+    def log_losses(train_loss: float, test_loss: float, epoch: int, commit: bool, **kwargs) -> None:
         """
         Log train and test losses in separate panels.
         :param test_loss:
@@ -42,25 +43,56 @@ class WeightandBiaises:
         :param train_loss: average test loss for the current epoch.
         :param epoch: current epoch.
         """
-        bool_commit = True
-        wandb.log({"Train/Loss": train_loss, "Test/Loss": test_loss}, step=epoch, commit=bool_commit)
+        wandb.log({"Train/Total_Loss": train_loss, "Test/Total_Loss": test_loss}, step=epoch, commit=commit)
+
+    @staticmethod
+    def log_detailed_losses(train_obj_loss: float, test_obj_loss: float, train_bbox_loss: float,
+                            test_bbox_loss: float, epoch: int, commit: bool, **kwargs) -> None:
+        """
+        Log train and test losses in separate panels.
+        :param test_bbox_loss:
+        :param train_bbox_loss:
+        :param test_obj_loss:
+        :param train_obj_loss:
+        :param epoch: current epoch.
+        """
+        wandb.log({"Train/Objectness_Loss": train_obj_loss, "Test/Objectness_Loss": test_obj_loss,
+                   "Train/Regression_Loss": train_bbox_loss, "Test/Regression_Loss": test_bbox_loss}, step=epoch,
+                  commit=commit)
+
 
     def log_accuracy(self, train_accuracy: Union[None, float, List], test_accuracy: Union[float, List],
-                     epoch: int) -> None:
+                     epoch: int, commit: bool, **kwargs) -> None:
         """
         Log iou accuracy.
+        :param commit:
         :param train_accuracy:
         :param test_accuracy: average iou accuracy for the current epoch.
         :param epoch: current epoch.
         """
         if len(self.class_labels) < 2:
             if train_accuracy is not None:
-                wandb.log({"Test/Accuracy": test_accuracy, "Train/Accuracy": train_accuracy}, step=epoch, commit=False)
+                wandb.log({"Test/Total_Accuracy": test_accuracy, "Train/Total_Accuracy": train_accuracy}, step=epoch,
+                          commit=False)
             else:
-                wandb.log({"Test/Accuracy": test_accuracy}, step=epoch, commit=False)
+                wandb.log({"Test/Total_Accuracy": test_accuracy}, step=epoch, commit=commit)
         else:
             for idx, cls in enumerate(self.class_labels):
-                wandb.log({"Test/Accuracy_" + cls: test_accuracy[idx]}, commit=False)
+                wandb.log({"Test/Total_Accuracy_" + cls: test_accuracy[idx]}, commit=False)
+
+    @staticmethod
+    def log_detailed_accuracies(train_obj_accuracy: float, test_obj_accuracy: float, train_bbox_accuracy: float,
+                                test_bbox_accuracy: float, epoch: int, commit: bool, **kwargs):
+        wandb.log({"Train/Objectness_Accuracy": train_obj_accuracy, "Test/Objectness_Accuracy": test_obj_accuracy,
+                   "Train/Regression_Accuracy": train_bbox_accuracy, "Test/Regression_Accuracy": test_bbox_accuracy},
+                  step=epoch, commit=commit)
+
+    def log_detailed_stats(self, stats: Dict):
+        self.log_losses(**stats, commit=False)
+        self.log_detailed_losses(**stats, commit=False)
+        self.log_accuracy(**stats, commit=False)
+        self.log_detailed_accuracies(**stats, commit=True)
+
 
     def visualize_one_image(self, pred, x) -> wandb.Image:
         """

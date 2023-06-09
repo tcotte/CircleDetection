@@ -31,6 +31,7 @@ if __name__ == "__main__":
         image = np.ones((img_height, img_width, 3), np.uint8)
         bg_color = tuple(np.random.randint(low=0, high=200, size=3, dtype=int))
         image = image*bg_color
+        image = image.astype(np.uint8)
 
         if bool(np.random.binomial(1, 1-args.empty_pix_percentage)):
 
