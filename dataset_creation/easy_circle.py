@@ -10,7 +10,7 @@ parser = argparse.ArgumentParser(description='Process some integers.')
 parser.add_argument('--img_w', type=int, default=128, help='Image width')
 parser.add_argument('--img_h', type=int, default=128, help='Image height')
 parser.add_argument('--path', type=str, required=True, help='Dataset path')
-parser.add_argument('--empty_pix_percentage', type=float, default=0.5, help='Percentage of empty pictures')
+parser.add_argument('--empty-pix-percentage', type=float, default=0.5, help='Percentage of empty pictures')
 parser.add_argument('--nb_samples', type=int, required=True, help='Number of samples in the created dataset')
 
 args = parser.parse_args()
@@ -32,7 +32,7 @@ if __name__ == "__main__":
         bg_color = tuple(np.random.randint(low=0, high=200, size=3, dtype=int))
         image = image*bg_color
 
-        if bool(np.random.binomial(1, 0.5)):
+        if bool(np.random.binomial(1, 1-args.empty_pix_percentage)):
 
             radius = np.random.randint(low=5, high=round(img_height / 3))
             x_center_pos = np.random.randint(low=radius, high=img_width - 2 * radius)

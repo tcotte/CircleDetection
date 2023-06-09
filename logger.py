@@ -1,4 +1,4 @@
-from typing import Union, List, Any
+from typing import Union, List, Any, Dict
 
 import numpy as np
 import wandb
@@ -7,7 +7,8 @@ import torch
 
 
 class WeightandBiaises:
-    def __init__(self, project_name: str = "my_dl_project", run_id=None, interval_display: int = 10):
+    def __init__(self, project_name: str = "my_dl_project", run_id=None, interval_display: int = 10,
+                 cfg: Union[Dict, None] = None):
         """
         This class enables to send data from training to Weight&Biaises to visualize the
         behaviour of our training.
@@ -17,6 +18,9 @@ class WeightandBiaises:
         :param interval_display: this enables to display the mask_debugger with an interval
         of {interval_display} epochs.
         """
+        if cfg is None:
+            cfg = {}
+
         self.interval_display = interval_display
         self.class_labels = {
             0: "circle"
@@ -25,7 +29,7 @@ class WeightandBiaises:
         self.run_id = run_id
 
         wandb.login()
-        wandb.init(id=run_id, project=project_name)
+        wandb.init(id=run_id, project=project_name, config=cfg)
         self.run_id = wandb.run.name
 
         self.image_list = []
@@ -107,11 +111,10 @@ class WeightandBiaises:
         :param x: torch tensor image [B, 3, H, W]
         :param e: current epoch
         """
-        if (e!=0) and (e % self.interval_display == 0):
+        if (e != 0) and (e % self.interval_display == 0):
             for pred, x, y in zip(pred_batch, x_batch, y_batch):
                 wandb_mask = self.visualize_one_image(pred, x)
                 self.image_list.append(wandb_mask)
-
 
     def log_table(self, e: int):
         """

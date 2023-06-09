@@ -47,6 +47,7 @@ class CustomImageDataset(Dataset):
             probabilities = np.ones(len(bboxes), dtype=float)
 
         else:
+            print("no ann")
             bboxes = np.array([[0, 0, 1, 1]], dtype=int)
             category_ids = np.zeros(len(bboxes), dtype=int)
             probabilities = np.zeros(len(bboxes), dtype=float)

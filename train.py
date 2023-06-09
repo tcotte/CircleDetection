@@ -1,3 +1,4 @@
+import argparse
 import math
 import os
 import time
@@ -19,6 +20,23 @@ from model.object_detector import ObjectDetector
 from torch_datasets import CustomImageDataset
 from utils import create_directory
 
+parser = argparse.ArgumentParser(description='Train custom model which enables to detect circles')
+parser.add_argument('--epochs', type=int, default=200, help='total training epochs')
+parser.add_argument('--batch-size', type=int, default=16, help='total batch size for all GPUs, -1 for autobatch')
+parser.add_argument('--name', type=str, default=None, help='save to project/name')
+parser.add_argument('--bbox-ratio', type=float, default=0.6, help='Bbox regression ratio on loss weight')
+parser.add_argument('--prob-ratio', type=float, default=0.4, help='Probability that bbox is not a FP ratio on loss '
+                                                                  'weight')
+parser.add_argument('--unfreeze', type=int, default=5, help='Unfrozen layers')
+parser.add_argument('--pretrained', action='store_true', help='Use backbone pretrained weights')
+parser.add_argument('--wb', action='store_true', help='Visualize training with W&B API')
+parser.add_argument('--imgsz', nargs='+', type=int, help="Image size used for the training")
+parser.add_argument('--lr', type=float, default=1e-5, help='Learning rate')
+parser.add_argument('--path', type=str, required=True, help='Dataset root path')
+parser.add_argument('--translation', action='store_true', help='Use translation augmentations')
+
+args = parser.parse_args()
+
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 PIN_MEMORY = True if DEVICE == "cuda" else False
 # specify ImageNet mean and standard deviation
@@ -26,34 +44,27 @@ MEAN = [0.485, 0.456, 0.406]
 STD = [0.229, 0.224, 0.225]
 # initialize our initial learning rate, number of epochs to train
 # for, and the batch size
-INIT_LR = 1e-5
-NUM_EPOCHS = 500
-BATCH_SIZE = 1
+INIT_LR = args.lr
+NUM_EPOCHS = args.epochs
+BATCH_SIZE = args.batch_size
 # specify the loss weights
 LABELS = 1.0
-BBOX = 0.6
-PROB = 0.4
+BBOX = args.bbox_ratio
+PROB = args.prob_ratio
+UNFROZEN_LAYERS = args.unfreeze
+PRETRAINED_BACKBONE = args.pretrained
+# IMGSZ = (128, 128) # height, width
+IMGSZ = args.imgsz # height, width
 
 
-wb_visu = False
+wb_visu = args.wb
 
-def fix_bboxes(bboxes):
-    for box in bboxes:
-        if box[0] > box[2]:
-            box[2] = box[0]
-        if box[1] > box[3]:
-            box[3] = box[1]
-    return bboxes
-
-
-model_name = "testwb"
+model_name = args.name
 
 CLASSES = ["Circle"]
-
 bbox_format = 'albumentations'
-train_transform = A.Compose(
-    [
-        A.augmentations.geometric.transforms.Affine (scale=(0.5, 1), translate_percent=(0.15, 0.5), keep_ratio=True, p=0.5),
+
+list_train_transformation = [
         A.Equalize(mode='cv', by_channels=True, mask=None, p=0.5),
         A.HorizontalFlip(p=0.5),
         A.VerticalFlip(p=0.5),
@@ -65,26 +76,34 @@ train_transform = A.Compose(
             A.GridDistortion(p=0.5),
         ], p=0.0),
         A.Normalize(always_apply=True),
-        A.augmentations.geometric.resize.Resize(683, 1024, interpolation=1, always_apply=False, p=1),
-        ToTensorV2()],
+
+        A.augmentations.geometric.resize.Resize(*IMGSZ, interpolation=1, always_apply=False, p=1),
+        ToTensorV2()]
+
+if args.translation:
+    list_train_transformation.insert(A.augmentations.geometric.transforms.Affine(scale=(0.5, 1), translate_percent=(0.15, 0.5), keep_ratio=True, p=0.5), 0)
+
+
+train_transform = A.Compose(
+    list_train_transformation,
     bbox_params=A.BboxParams(format=bbox_format, label_fields=['category_ids']),
 )
 
 test_transform = A.Compose([
-    A.augmentations.geometric.resize.Resize(683, 1024, interpolation=1, always_apply=False, p=1),
+    # A.augmentations.geometric.resize.Resize(*IMGSZ, interpolation=1, always_apply=False, p=1),
     A.Normalize(always_apply=True),
     ToTensorV2()],
     bbox_params=A.BboxParams(format=bbox_format, label_fields=['category_ids'])
 )
 
 train_dataset = CustomImageDataset(
-    img_dir=r"datasets/dataset_circle/train/img",
-    label_dir=r"datasets/dataset_circle/train/labels",
+    img_dir=os.path.join(args.path, "train/img"),
+    label_dir=os.path.join(args.path, "train/labels"),
     transform=train_transform)
 
 val_dataset = CustomImageDataset(
-    img_dir=r"datasets/dataset_circle/val/img",
-    label_dir=r"datasets/dataset_circle/val/labels",
+    img_dir=os.path.join(args.path, "val/img"),
+    label_dir=os.path.join(args.path, "val/labels"),
     transform=test_transform)
 
 training_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False)
@@ -98,20 +117,19 @@ if __name__ == "__main__":
     trainSteps = math.ceil(len(train_dataset) / BATCH_SIZE)
     valSteps = math.ceil(len(val_dataset) / BATCH_SIZE)
     # create data loaders
-    trainLoader = DataLoader(train_dataset, batch_size=BATCH_SIZE,
-                             shuffle=True, num_workers=os.cpu_count(), pin_memory=PIN_MEMORY)
-    testLoader = DataLoader(val_dataset, batch_size=BATCH_SIZE,
-                            num_workers=os.cpu_count(), pin_memory=PIN_MEMORY)
+    # trainLoader = DataLoader(train_dataset, batch_size=BATCH_SIZE,
+    #                          shuffle=True, num_workers=os.cpu_count(), pin_memory=PIN_MEMORY)
+    # testLoader = DataLoader(val_dataset, batch_size=BATCH_SIZE,
+    #                         num_workers=os.cpu_count(), pin_memory=PIN_MEMORY)
 
     # Network
-    # load the ResNet50 network
-    backbone = resnet18(pretrained=False)
-    # freeze all ResNet50 layers so they will *not* be updated during the
-    # training process
+    # load the ResNet network
+    backbone = resnet18(pretrained=PRETRAINED_BACKBONE)
+    # freeze some ResNet layers so they will *not* be updated during the training process
     params = backbone.state_dict()
     list_layers = list(params.keys())
     for name, param in backbone.named_parameters():
-        if name in list_layers[0:]:
+        if name in list_layers[-UNFROZEN_LAYERS:]:
             param.requires_grad = True
         else:
             param.requires_grad = False
@@ -135,7 +153,20 @@ if __name__ == "__main__":
          "val_class_acc": [], "train_iou": [], "val_iou": []}
 
     if wb_visu:
-        w_b = WeightandBiaises(project_name="circle_detection", run_id=model_name, interval_display=50)
+        w_b = WeightandBiaises(project_name="circle_detection", run_id=model_name, interval_display=50, cfg={
+            "epochs": NUM_EPOCHS,
+            "batch_size": BATCH_SIZE,
+            "learning_rate": INIT_LR,
+            "optimizer": repr(opt).split(" ")[0],
+            "unfrozen_layers": UNFROZEN_LAYERS,
+            "backbone_architecture": repr(backbone).split("(")[0],
+            "pretrained_bacbone": PRETRAINED_BACKBONE,
+            "dataset": "colored_circles",
+            "weight_loss_bbox_regression": BBOX,
+            "weight_loss_prob_x": PROB,
+            "image_size": IMGSZ,
+            "translation_aug": args.translation
+        })
     else:
         w_b = None
 
@@ -157,7 +188,7 @@ if __name__ == "__main__":
         val_iou = 0
 
         # loop over the training set
-        for (images, labels, bboxes, probs, filenames) in trainLoader:
+        for (images, labels, bboxes, probs, filenames) in training_loader:
             # send the input to the device
             labels = torch.Tensor(labels)
             # bboxes = torch.stack(bboxes, dim=1)
@@ -172,7 +203,7 @@ if __name__ == "__main__":
             predictions = objectDetector(images)
             bboxLoss = bboxLossFunc(predictions[0], bboxes)
             prob_loss = probLossFunc(predictions[2], probs.float())
-            totalLoss = BBOX * bboxLoss + prob_loss * LABELS
+            totalLoss = BBOX * bboxLoss + prob_loss * PROB
 
             totalLoss = totalLoss.to(torch.float)
 
@@ -192,7 +223,7 @@ if __name__ == "__main__":
             # set the model in evaluation mode
             objectDetector.eval()
             # loop over the validation set
-            for (images, labels, bboxes, probs, _) in testLoader:
+            for (images, labels, bboxes, probs, _) in validation_loader:
                 # send the input to the device
                 labels = torch.Tensor(labels)
                 bboxes = torch.squeeze(bboxes, 1)
@@ -204,9 +235,9 @@ if __name__ == "__main__":
                 predictions = objectDetector(images)
 
                 bboxLoss = bboxLossFunc(predictions[0], bboxes.to(torch.float32))
-                classLoss = classLossFunc(predictions[1], labels)
+                # classLoss = classLossFunc(predictions[1], labels)
                 prob_loss = probLossFunc(predictions[2], probs.float())
-                totalLoss = BBOX * bboxLoss
+                totalLoss = BBOX * bboxLoss + prob_loss * PROB
                 totalValLoss += totalLoss
                 # calculate the number of correct predictions
                 val_iou += batch_iou(a=predictions[0].detach().cpu().numpy(), b=bboxes.cpu().numpy()).sum() / len(
@@ -240,7 +271,7 @@ if __name__ == "__main__":
             endTime - startTime))
 
         if w_b is not None:
-            w_b.log_accuracy(train_accuracy=train_iou, test_accuracy=val_iou, epoch=e)
+            w_b.log_accuracy(train_accuracy=train_iou / trainSteps, test_accuracy=val_iou / valSteps, epoch=e)
             w_b.log_losses(train_loss=avgTrainLoss.cpu().detach().numpy(), test_loss=avgValLoss.cpu().detach().numpy(), epoch=e)
             w_b.log_table(e)
 
