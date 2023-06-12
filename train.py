@@ -81,7 +81,7 @@ list_train_transformation = [
         ToTensorV2()]
 
 if args.translation:
-    list_train_transformation.insert(A.augmentations.geometric.transforms.Affine(scale=(0.5, 1), translate_percent=(0.15, 0.5), keep_ratio=True, p=0.5), 0)
+    list_train_transformation.insert(0, A.augmentations.geometric.transforms.Affine(scale=(0.5, 1), translate_percent=(0.15, 0.5), keep_ratio=True, p=0.5))
 
 
 train_transform = A.Compose(
@@ -90,7 +90,7 @@ train_transform = A.Compose(
 )
 
 test_transform = A.Compose([
-    # A.augmentations.geometric.resize.Resize(*IMGSZ, interpolation=1, always_apply=False, p=1),
+    A.augmentations.geometric.resize.Resize(*IMGSZ, interpolation=1, always_apply=False, p=1),
     A.Normalize(always_apply=True),
     ToTensorV2()],
     bbox_params=A.BboxParams(format=bbox_format, label_fields=['category_ids'])
@@ -291,14 +291,14 @@ if __name__ == "__main__":
                     "train_obj_accuracy": 0, "test_obj_accuracy": 0,
                     "train_bbox_accuracy": train_iou / train_steps, "test_bbox_accuracy": val_iou / val_steps,
                     "train_obj_loss": obj_train_loss / train_steps, "test_obj_loss": obj_test_loss / val_steps,
-                    "train_bbox_loss": bbox_train_loss, "test_bbox_loss": bbox_test_loss
+                    "train_bbox_loss": bbox_train_loss, "test_bbox_loss": bbox_test_loss, "epoch": e
                 })
             else:
                 w_b.log_accuracy(train_accuracy=train_iou / train_steps, test_accuracy=val_iou / val_steps, epoch=e,
                                  commit=False)
                 w_b.log_losses(train_loss=avg_train_loss.cpu().detach().numpy(),
                                test_loss=avg_val_loss.cpu().detach().numpy(), epoch=e, commit=True)
-                w_b.log_table(e)
+            w_b.log_table(e)
 
 
     # serialize the model to disk

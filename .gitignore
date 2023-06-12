@@ -163,3 +163,4 @@ runs/
 trained_models/
 datasets/
 wandb/
+temp/
