@@ -104,8 +104,11 @@ val_dataset = CustomImageDataset(
     label_dir=os.path.join(args.path, "val/labels"),
     transform=test_transform)
 
-training_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=False)
-validation_loader = torch.utils.data.DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
+training_loader = torch.utils.data.DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True,
+                                              num_workers=os.cpu_count(), pin_memory=PIN_MEMORY)
+validation_loader = torch.utils.data.DataLoader(val_dataset, batch_size=BATCH_SIZE, num_workers=os.cpu_count(),
+                                                pin_memory=PIN_MEMORY)
+
 
 if __name__ == "__main__":
 
