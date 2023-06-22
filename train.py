@@ -10,7 +10,7 @@ from albumentations.pytorch import ToTensorV2
 from torch import optim
 from torch.nn import CrossEntropyLoss, BCELoss
 from torch.utils.data import DataLoader
-from torchvision.models import resnet18, ResNet50_Weights
+from torchvision.models import resnet18, ResNet18_Weights
 from tqdm import tqdm
 
 from logger import WeightandBiaises
@@ -126,7 +126,7 @@ if __name__ == "__main__":
     # Network
     # load the ResNet network
     if PRETRAINED_BACKBONE:
-        weights = ResNet50_Weights.DEFAULT
+        weights = ResNet18_Weights.DEFAULT
     else:
         weights = None
 
