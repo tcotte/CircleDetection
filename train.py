@@ -10,7 +10,7 @@ from albumentations.pytorch import ToTensorV2
 from torch import optim
 from torch.nn import CrossEntropyLoss, BCELoss
 from torch.utils.data import DataLoader
-from torchvision.models import resnet18
+from torchvision.models import resnet18, ResNet50_Weights
 from tqdm import tqdm
 
 from logger import WeightandBiaises
@@ -125,7 +125,12 @@ if __name__ == "__main__":
 
     # Network
     # load the ResNet network
-    backbone = resnet18(pretrained=PRETRAINED_BACKBONE)
+    if PRETRAINED_BACKBONE:
+        weights = ResNet50_Weights.DEFAULT
+    else:
+        weights = None
+
+    backbone = resnet18(weights=weights)
     # freeze some ResNet layers so they will *not* be updated during the training process
     params = backbone.state_dict()
     list_layers = list(params.keys())
