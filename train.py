@@ -230,7 +230,7 @@ if __name__ == "__main__":
             totalTrainLoss += totalLoss
             bbox_train_loss += bbox_loss
             obj_train_loss += objectness_loss
-            obj_train_acc += torch.sum(torch.where(predictions[2] > 0.5, 1, 0) == probs).item()
+            obj_train_acc += torch.sum(torch.where(predictions[2] > 0.5, 1, 0) == probs).item() / len(bboxes)
 
 
         # switch off autograd
@@ -259,7 +259,7 @@ if __name__ == "__main__":
                 # calculate the number of correct predictions
                 val_iou += batch_iou(a=predictions[0].detach().cpu().numpy(), b=bboxes.cpu().numpy()).sum() / len(
                     bboxes)
-                obj_test_acc += torch.sum(torch.where(predictions[2] > 0.5, 1, 0) == probs).item()
+                obj_test_acc += torch.sum(torch.where(predictions[2] > 0.5, 1, 0) == probs).item() / len(bboxes)
 
                 if w_b is not None:
                     w_b.plot_one_batch(predictions[0], images, [None]*len(predictions[0]), e)
@@ -313,7 +313,7 @@ if __name__ == "__main__":
     create_directory(output_path)
     torch.save(objectDetector, os.path.join(output_path, model_name + '.pt'))
     if w_b is not None:
-        w_b.save_model(model_path=os.path.join(output_path, model_name + ".pth"))
+        w_b.save_model(model=objectDetector, model_name="last")
     print("[INFO] Model was saved online")
     # f = open(LE_PATH, "wb")
     # f.write(pickle.dumps(le))

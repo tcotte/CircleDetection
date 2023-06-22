@@ -1,3 +1,4 @@
+import os
 from typing import Union, List, Any, Dict
 
 import numpy as np
@@ -202,11 +203,18 @@ class WeightandBiaises:
     #             bkgd_mask += mask * (i + 1)
     #         return bkgd_mask
 
-    def save_model(self, model_path: str) -> None:
+    # def save_model(self, model_path: str) -> None:
+    #     """
+    #     Save the last model into W&B
+    #     :param model_path: location of model in local
+    #     """
+    #     artifact = wandb.Artifact('last_model', type='model')
+    #     artifact.add_file(local_path=model_path, name="last.pth")
+    #     wandb.log_artifact(artifact)
+
+    def save_model(self, model_name: str, model) -> None:
         """
         Save the last model into W&B
-        :param model_path: location of model in local
+        :param model_name: model's name
         """
-        artifact = wandb.Artifact('last_model', type='model')
-        artifact.add_file(local_path=model_path, name="last.pth")
-        wandb.log_artifact(artifact)
+        model.save(os.path.join(wandb.run.dir, model_name + ".pt"))
