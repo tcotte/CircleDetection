@@ -288,7 +288,8 @@ if __name__ == "__main__":
         if w_b is not None:
             if args.prob_ratio > 0:
                 w_b.log_detailed_stats(stats={
-                    "train_accuracy": train_iou / train_steps, "test_accuracy": val_iou / val_steps,
+                    "train_accuracy": ((BBOX*train_iou) + (PROB*obj_train_acc)) / train_steps,
+                    "test_accuracy": ((BBOX*val_iou) + (PROB*obj_test_acc)) / val_steps,
                     "train_loss": avg_train_loss.cpu().detach().numpy(), "test_loss": avg_val_loss.cpu().detach().numpy(),
                     # To complete
                     "train_obj_accuracy": obj_train_acc / train_steps, "test_obj_accuracy": obj_test_acc / val_steps,
