@@ -39,9 +39,7 @@ args = parser.parse_args()
 
 DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 PIN_MEMORY = True if DEVICE == "cuda" else False
-# specify ImageNet mean and standard deviation
-MEAN = [0.485, 0.456, 0.406]
-STD = [0.229, 0.224, 0.225]
+
 # initialize our initial learning rate, number of epochs to train
 # for, and the batch size
 INIT_LR = args.lr
@@ -81,7 +79,7 @@ list_train_transformation = [
         ToTensorV2()]
 
 if args.translation:
-    list_train_transformation.insert(0, A.augmentations.geometric.transforms.Affine(scale=(0.5, 1), translate_percent=(0.15, 0.5), keep_ratio=True, p=0.5))
+    list_train_transformation.insert(0, A.augmentations.geometric.transforms.Affine(scale=(0.5, 1), translate_percent=(0.05, 0.3), keep_ratio=True, p=0.5))
 
 
 train_transform = A.Compose(
@@ -187,8 +185,8 @@ if __name__ == "__main__":
         obj_test_loss = 0
         # initialize the number of correct predictions in the training
         # and validation step
-        trainCorrect = 0
-        valCorrect = 0
+        obj_train_acc = 0
+        obj_test_acc = 0
 
         train_iou = 0
         val_iou = 0
@@ -224,7 +222,8 @@ if __name__ == "__main__":
             totalTrainLoss += totalLoss
             bbox_train_loss += bbox_loss
             obj_train_loss += objectness_loss
-            trainCorrect += (predictions[1].argmax(1) == labels).type(torch.float).sum().item()
+            obj_train_acc += torch.sum(torch.where(predictions[2] > 0.5, 1, 0) == probs).item()
+
 
         # switch off autograd
         with torch.no_grad():
@@ -252,7 +251,7 @@ if __name__ == "__main__":
                 # calculate the number of correct predictions
                 val_iou += batch_iou(a=predictions[0].detach().cpu().numpy(), b=bboxes.cpu().numpy()).sum() / len(
                     bboxes)
-                valCorrect += (predictions[1].argmax(1) == labels).type(torch.float).sum().item()
+                obj_test_acc += torch.sum(torch.where(predictions[2] > 0.5, 1, 0) == probs).item()
 
                 if w_b is not None:
                     w_b.plot_one_batch(predictions[0], images, [None]*len(predictions[0]), e)
@@ -263,13 +262,9 @@ if __name__ == "__main__":
 
 
         # calculate the training and validation accuracy
-        trainCorrect = trainCorrect / len(train_dataset)
-        valCorrect = valCorrect / len(val_dataset)
         # update our training history
         H["total_train_loss"].append(avg_train_loss.cpu().detach().numpy())
-        H["train_class_acc"].append(trainCorrect)
         H["total_val_loss"].append(avg_val_loss.cpu().detach().numpy())
-        H["val_class_acc"].append(valCorrect)
         H["train_iou"].append(train_iou / train_steps)
         H["val_iou"].append(val_iou / val_steps)
         # print the model training and validation information
@@ -288,7 +283,7 @@ if __name__ == "__main__":
                     "train_accuracy": train_iou / train_steps, "test_accuracy": val_iou / val_steps,
                     "train_loss": avg_train_loss.cpu().detach().numpy(), "test_loss": avg_val_loss.cpu().detach().numpy(),
                     # To complete
-                    "train_obj_accuracy": 0, "test_obj_accuracy": 0,
+                    "train_obj_accuracy": obj_train_acc / train_steps, "test_obj_accuracy": obj_test_acc / val_steps,
                     "train_bbox_accuracy": train_iou / train_steps, "test_bbox_accuracy": val_iou / val_steps,
                     "train_obj_loss": obj_train_loss / train_steps, "test_obj_loss": obj_test_loss / val_steps,
                     "train_bbox_loss": bbox_train_loss, "test_bbox_loss": bbox_test_loss, "epoch": e

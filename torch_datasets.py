@@ -28,6 +28,7 @@ class CustomImageDataset(Dataset):
         txtfile = filename[:-4] + ".txt"
         txtfile = os.path.join(self.label_dir, txtfile)
 
+        img_h, img_w = image.shape[:2]
         if os.stat(txtfile).st_size > 0:
             opened_file = open(txtfile, "r")
             bboxes = opened_file.readline().split(" ")
@@ -47,7 +48,7 @@ class CustomImageDataset(Dataset):
             probabilities = np.ones(len(bboxes), dtype=float)
 
         else:
-            bboxes = np.array([[0, 0, 1, 1]], dtype=int)
+            bboxes = np.array([[0, 0, 1/img_w, 1/img_h]], dtype=float)
             category_ids = np.zeros(len(bboxes), dtype=int)
             probabilities = np.zeros(len(bboxes), dtype=float)
 
