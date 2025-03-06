@@ -24,6 +24,7 @@ parser = argparse.ArgumentParser(description='Train custom model which enables t
 parser.add_argument('--epochs', type=int, default=200, help='total training epochs')
 parser.add_argument('--batch-size', type=int, default=16, help='total batch size for all GPUs, -1 for autobatch')
 parser.add_argument('--name', type=str, default=None, help='save to project/name')
+parser.add_argument('--weights', type=str, default=None, help='Load pretrained weights through model path')
 parser.add_argument('--bbox-ratio', type=float, default=0.6, help='Bbox regression ratio on loss weight')
 parser.add_argument('--prob-ratio', type=float, default=0.4, help='Probability that bbox is not a FP ratio on loss '
                                                                   'weight')
@@ -124,25 +125,31 @@ if __name__ == "__main__":
     #                         num_workers=os.cpu_count(), pin_memory=PIN_MEMORY)
 
     # Network
+    if args.weights is None:
     # load the ResNet network
-    if PRETRAINED_BACKBONE:
-        weights = ResNet18_Weights.DEFAULT
-    else:
-        weights = None
-
-    backbone = resnet18(weights=weights)
-    # freeze some ResNet layers so they will *not* be updated during the training process
-    params = backbone.state_dict()
-    list_layers = list(params.keys())
-    for name, param in backbone.named_parameters():
-        if name in list_layers[-UNFROZEN_LAYERS:]:
-            param.requires_grad = True
+        if PRETRAINED_BACKBONE:
+            weights = ResNet18_Weights.DEFAULT
         else:
-            param.requires_grad = False
+            weights = None
 
-    # create our custom object detector model and flash it to the current
-    # device
-    objectDetector = ObjectDetector(backbone, len(CLASSES))
+        backbone = resnet18(weights=weights)
+        # freeze some ResNet layers, so they will *not* be updated during the training process
+        params = backbone.state_dict()
+        list_layers = list(params.keys())
+        for name, param in backbone.named_parameters():
+            if name in list_layers[-UNFROZEN_LAYERS:]:
+                param.requires_grad = True
+            else:
+                param.requires_grad = False
+
+        # create our custom object detector model and flash it to the current
+        # device
+        objectDetector = ObjectDetector(backbone, len(CLASSES))
+
+    else:
+        objectDetector = torch.load(args.weights, map_location=torch.device('cpu'))
+
+
     objectDetector = objectDetector.to(DEVICE)
     # define our loss functions
 
@@ -210,10 +217,14 @@ if __name__ == "__main__":
 
             (images, labels, bboxes, probs) = (images.to(DEVICE),
                                         labels.to(DEVICE), bboxes.to(DEVICE), probs.to(DEVICE))
+
+
             # perform a forward pass and calculate the training loss
             opt.zero_grad()
             predictions = objectDetector(images)
-            bbox_loss = bboxLossFunc(predictions[0], bboxes)
+            coord_pred = predictions[0]*probs
+            bboxes *= probs
+            bbox_loss = bboxLossFunc(coord_pred.float(), bboxes)
             objectness_loss = probLossFunc(predictions[2], probs.float())
             totalLoss = BBOX * bbox_loss + objectness_loss * PROB
 
@@ -226,7 +237,7 @@ if __name__ == "__main__":
             opt.step()
             # add the loss to the total training loss so far and
             # calculate the number of correct predictions
-            train_iou += batch_iou(a=predictions[0].detach().cpu().numpy(), b=bboxes.cpu().numpy()).sum() / len(bboxes)
+            train_iou += batch_iou(a=coord_pred.detach().cpu().numpy(), b=bboxes.cpu().numpy()).sum() / len(bboxes)
             totalTrainLoss += totalLoss
             bbox_train_loss += bbox_loss
             obj_train_loss += objectness_loss
@@ -249,7 +260,10 @@ if __name__ == "__main__":
                 # make the predictions and calculate the validation loss
                 predictions = objectDetector(images)
 
-                bbox_loss = bboxLossFunc(predictions[0], bboxes.to(torch.float32))
+                coord_pred = predictions[0] * probs
+                bboxes *= probs
+
+                bbox_loss = bboxLossFunc(coord_pred.float(), bboxes.to(torch.float32))
                 # classLoss = classLossFunc(predictions[1], labels)
                 objectness_loss = probLossFunc(predictions[2], probs.float())
                 totalLoss = BBOX * bbox_loss + objectness_loss * PROB
@@ -257,7 +271,7 @@ if __name__ == "__main__":
                 bbox_test_loss += bbox_loss
                 obj_test_loss += objectness_loss
                 # calculate the number of correct predictions
-                val_iou += batch_iou(a=predictions[0].detach().cpu().numpy(), b=bboxes.cpu().numpy()).sum() / len(
+                val_iou += batch_iou(a=coord_pred.detach().cpu().numpy(), b=bboxes.cpu().numpy()).sum() / len(
                     bboxes)
                 obj_test_acc += torch.sum(torch.where(predictions[2] > 0.5, 1, 0) == probs).item() / len(bboxes)
 
